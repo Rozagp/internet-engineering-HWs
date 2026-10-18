@@ -401,3 +401,7 @@ git push origin main
 ### Why `git reset` and `git push --force` are wrong
 1. `git reset --hard` deletes the commit locally. Pushing that with `--force` rewrites the remote branch's history. Because teammates have already pulled the bad commit, their local branches will diverge from the remote branch. When they next pull or push, Git will attempt to reconcile the divergent branches, typically causing merge conflicts or reintroducing the bad commit via an accidental merge.
 2. In a shared production branch like `main`, preserving an unbroken, transparent audit log is critical. `git revert` is safe and collaborative because it records the reversal as an explicit, traceable event that team members can pull cleanly with a standard `git pull`.
+
+
+---
+I used Google Gemini for formmating and polishing the final wording and providing examples.

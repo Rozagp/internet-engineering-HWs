@@ -34,12 +34,12 @@
 ## Question 2: Selecting Partial Changes (Hunks)
 
 ### 1. Definition of a Hunk in Git Diff Output
-In Git's diff output, a **hunk** refers to a discrete, contiguous block of modified lines (added, deleted, or changed) presented alongside a few lines of unmodified surrounding context lines. Git groups nearby edits into individual hunks, with each hunk preceded by a header showing original and new line ranges (e.g., `@@ -12,6 +12,8 @@`). This modular division allows you to view and stage distinct modifications independently, even when they occur within the same file.
+In Git's diff output, a **hunk** refers to a discrete, contiguous block of modified lines (added, deleted, or changed) presented alongside a few lines of unmodified surrounding context lines. Git groups nearby edits into individual hunks, with each hunk preceded by a header showing original and new line ranges (e.g., `@@ -12,6 +12,8 @@`). This modular division allows us to view and stage distinct modifications independently, even when they occur within the same file.
 
 ---
 
 ### 2. Interactively Reviewing and Staging Specific Hunks via CLI
-To review changes interactively and pick specific hunks for the next commit, execute:
+To review changes interactively and pick specific hunks for the next commit, we execute:
 
 ```bash
 git add -p <file_path>
@@ -65,3 +65,100 @@ For every detected hunk, Git prompts with `Stage this hunk [y,n,q,a,d,s,e,?]?`. 
 * **Logical Separation of Concerns (Atomic Commits):** Prevents mixing unrelated modifications (e.g., refactoring existing code, fixing a distinct bug, and temporary debug logging) in a single commit, enabling you to keep each commit focused on one specific task.
 * **Cleaner and Easier Code Reviews:** Reviewers can inspect isolated changes with clear, focused intent instead of parsing a tangled diff.
 * **Safer Rollbacks and Cherry-Picking:** When commits are strictly atomic, individual bug fixes or features can be reverted (`git revert`) or backported (`git cherry-pick`) cleanly without causing accidental regressions or dragging along unrelated code.
+
+
+
+# Question 3: Finding the Root Cause with git bisect
+
+## 1. How git bisect Works
+`git bisect` is a built-in Git debugging tool that runs a **binary search** across the project history to hunt down the commit that broke something.
+
+Instead of testing commits one by one:
+- We tell Git one commit where the code is broken (`bad`) and an earlier commit where everything still worked (`good`).
+- Git splits that range in half and automatically checks out the commit right in the middle.
+- We test whether the bug is present at that middle commit.
+- Depending on our answer, Git cuts the remaining search space in half again and repeats the process until it isolates the single commit responsible for the bug.
+
+---
+
+## 2. Step-by-Step Workflow
+
+1. **Start the bisect session:**
+   ```bash
+   git bisect start
+   ```
+
+2. **Tag the broken commit:**
+   Usually this is wherever we are right now (`HEAD`):
+   ```bash
+   git bisect bad
+   ```
+
+3. **Tag the last known good commit:**
+   Provide a commit hash or tag where the feature was working:
+   ```bash
+   git bisect good <commit-hash-or-tag>
+   ```
+
+4. **Test the midpoint:**
+   Git checks out a commit halfway between good and bad. Run the app or tests:
+   - If it is broken:
+     ```bash
+     git bisect bad
+     ```
+   - If it works fine:
+     ```bash
+     git bisect good
+     ```
+
+5. **Let Git find the problem:**
+   Repeat step 4 each time Git serves up a new midpoint. Once finished, Git displays the offending commit:
+   ```text
+   <commit-hash> is the first bad commit
+   ```
+
+6. **Reset the working tree:**
+   End the session and return to the branch/commit where you started:
+   ```bash
+   git bisect reset
+   ```
+
+---
+
+## 3. Practical Example
+For example user authentication crashes on `main` today:
+- We know it is broken right now at `HEAD`.
+- We know it worked fine during release `v2.1.0` three weeks ago, but there have been 200 commits since then.
+
+We run:
+```bash
+git bisect start
+git bisect bad HEAD
+git bisect good v2.1.0
+```
+Git checks out the commit halfway through the history. You run your auth test (`npm test auth`). 
+- If the test passes, you run `git bisect good`.
+- Git halves the remaining candidate commits and checks out the next point.
+
+After about 8 iterations, Git identifies the exact commit:
+```text
+e4b102c is the first bad commit
+Author: Alex <alex@example.com>
+Date:   Wed Oct 14 11:20:00 2026
+Commit Message: Refactor session validation middleware
+```
+
+We can also automate the whole loop if we have an automated test script:
+```bash
+git bisect run npm test
+```
+
+---
+
+## 4. Why This Method Is Effective
+- **Saves huge amounts of time:** Instead of sifting through hundreds of commits linearly ($O(N)$), binary search cuts the search down exponentially (log N).
+- **No guesswork:** We do not need to guess which PR or file might have caused the issue; Git methodically eliminates irrelevant commits.
+- **Immediate diff clarity:** Once identified, running `git show <commit-hash>` displays the exact line changes that introduced the defect, making a fix or revert simple.
+
+
+

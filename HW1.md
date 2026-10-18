@@ -1,4 +1,4 @@
-## Question 1: git merge vs. git rebase
+## Question 1
 
 ### 1. Functionality of Each Command
 * **`git merge`**: Integrates changes from a specified branch into your current branch. When the histories have diverged, it creates a new **merge commit** tied to both parent branches, joining them while preserving their historical commit logs.
@@ -31,7 +31,7 @@
   2. **Simplified debugging and review**: A straight linear timeline makes running tools like `git bisect` or reviewing the pull request significantly easier.
  
 
-## Question 2: Selecting Partial Changes (Hunks)
+## Question 2
 
 ### 1. Definition of a Hunk in Git Diff Output
 In Git's diff output, a **hunk** refers to a discrete, contiguous block of modified lines (added, deleted, or changed) presented alongside a few lines of unmodified surrounding context lines. Git groups nearby edits into individual hunks, with each hunk preceded by a header showing original and new line ranges (e.g., `@@ -12,6 +12,8 @@`). This modular division allows us to view and stage distinct modifications independently, even when they occur within the same file.
@@ -68,7 +68,7 @@ For every detected hunk, Git prompts with `Stage this hunk [y,n,q,a,d,s,e,?]?`. 
 
 
 
-# Question 3: Finding the Root Cause with git bisect
+# Question 3
 
 ## 1. How git bisect Works
 `git bisect` is a built-in Git debugging tool that runs a **binary search** across the project history to hunt down the commit that broke something.
@@ -162,7 +162,7 @@ git bisect run npm test
 
 
 
-# Question 4: Inspecting Changes Before Committing
+# Question 4
 
 ## Scenario Overview
 * The file `README.md` is tracked and already committed in the past.
@@ -243,7 +243,7 @@ Once saved in `.gitignore`, Git will ignore the `tmp/` directory and all files i
 
 
 
-# Question 5: Resolving Merge Conflicts in Teamwork
+# Question 5
 
 ## Scenario Overview
 * Us and a teammate branched off from the same base commit.
@@ -345,3 +345,59 @@ git merge --abort
 ### this command:
 * Cleans up all unresolved conflict markers from your working tree.
 * Resets the staging area and working directory back to the state of `HEAD` before `git merge` was invoked.
+
+
+# Question 6
+
+## Scenario 1:
+
+### Goal
+We made changes to a tracked file called `notes.txt`. We no longer want these changes. They have not been staged, and the version currently in the staging area matches the last commit. We want to discard only this file's working tree edits while leaving all other files intact.
+
+### Command
+```bash
+git restore notes.txt
+```
+
+### Impact
+* **Working Tree:** The edits made to `notes.txt` are erased. The file is reverted back to match the staged snapshot (and latest commit). Other files are completely untouched.
+* **Staging Area:** Unaffected (remains identical to the last commit).
+* **Commit History:** Unaffected (no new commits are made, and no existing commits change).
+
+---
+
+## Scenario 2
+
+### Goal
+We have accidentally run `git add notes.txt`, placing unwanted staged changes into the index. We have not committed yet. We want to remove `notes.txt` from the staging area so it won't be included in the next commit, but keep all the local edits safely in thee working tree.
+
+### Command
+```bash
+git restore --staged notes.txt
+```
+
+### Impact
+* **Working Tree:** Unaffected. All your edits inside `notes.txt` remain intact on disk in your working tree.
+* **Staging Area:** The staged changes for `notes.txt` are removed from the index. The index now reflects the state from the previous commit.
+* **Commit History:** Unaffected (no commits are modified or created).
+
+---
+
+## Scenario 3
+
+### Goal
+A standard commit (not a merge commit) was pushed to the shared `main` branch, and teammates have already pulled it. The working tree is clean. We want to undo the effect of that commit without deleting it or rewriting history.
+
+### Recommended Command
+```bash
+git revert <commit-hash>
+git push origin main
+```
+
+### Impact
+* **Working Tree & Staging Area:** Git computes the exact inverse of the changes introduced in `<commit-hash>` and applies them to your working tree and staging area.
+* **Commit History:** A brand-new commit is created that reverses the bad commit. The existing history is strictly preserved and moves forward linearly without any deletion of previous commits.
+
+### Why `git reset` and `git push --force` are wrong
+1. `git reset --hard` deletes the commit locally. Pushing that with `--force` rewrites the remote branch's history. Because teammates have already pulled the bad commit, their local branches will diverge from the remote branch. When they next pull or push, Git will attempt to reconcile the divergent branches, typically causing merge conflicts or reintroducing the bad commit via an accidental merge.
+2. In a shared production branch like `main`, preserving an unbroken, transparent audit log is critical. `git revert` is safe and collaborative because it records the reversal as an explicit, traceable event that team members can pull cleanly with a standard `git pull`.

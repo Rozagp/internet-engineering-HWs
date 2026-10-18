@@ -162,3 +162,186 @@ git bisect run npm test
 
 
 
+# Question 4: Inspecting Changes Before Committing
+
+## Scenario Overview
+* The file `README.md` is tracked and already committed in the past.
+* We staged some new edits to `README.md`.
+* Afterward, we made further edits to `README.md` in the working directory without running `git add` again.
+* We also have an untracked directory named `tmp/` containing temporary files.
+
+---
+
+## 1. Inspecting Changes and Repository Status
+
+### Commands to Run
+* **Check overall status:**
+  ```bash
+  git status
+  ```
+  This provides a high-level summary showing:
+  - Changes staged for commit (the first round of edits to `README.md`).
+  - Changes not staged for commit (the second round of edits to `README.md`).
+  - Untracked files (the `tmp/` folder).
+
+* **View unstaged changes (working tree vs. staging area):**
+  ```bash
+  git diff
+  # Or specifically for the file:
+  git diff README.md
+  ```
+  This shows the modifications we made to `README.md` *after* running the previous `git add`.
+
+* **View staged changes (staging area vs. last commit / HEAD):**
+  ```bash
+  git diff --staged
+  # Or:
+  git diff --cached
+  ```
+  This shows the modifications in `README.md` that are sitting in the index and actually ready to be committed.
+
+### Difference Between the Two Sets of Changes
+* **Staged changes (`git diff --staged`):** A snapshot of modifications explicitly added to the Git index. Git will include exactly these lines in the next commit.
+* **Unstaged changes (`git diff`):** Edits currently present only in our working tree. Git tracks the file, but these specific line changes have not yet been marked for inclusion in the upcoming commit.
+
+---
+
+## 2. Committing Without the `-a` Flag
+
+### What Gets Committed and What Remains?
+* **What gets committed:** Only the changes to `README.md` that were staged *before* the subsequent edits.
+* **What stays behind:** 
+  - The later unstaged edits to `README.md` remain untouched in our working directory.
+  - The entire `tmp/` directory remains untracked and uncommitted in our working directory.
+
+### Why This Happens
+Running `git commit -m "message"` (without `-a`) records a snapshot strictly from the **staging area (index)**, not the current state of our working directory. Because Git captures file state at the exact moment you run `git add`, any modifications made afterward do not automatically update the staging area unless staged again.
+
+---
+
+## 3. Preventing `tmp/` from Being Added to Future Commits
+
+### Configuration and Target File
+Add an entry for the folder inside the repository's `.gitignore` file located at the root of the project:
+
+```gitignore
+tmp/
+```
+
+Once saved in `.gitignore`, Git will ignore the `tmp/` directory and all files inside it, keeping them out of `git status` output and preventing commands like `git add .` from staging them.
+
+### Is This Enough for Already-Tracked Files?
+* No.`.gitignore` only tells Git to ignore **untracked** files. If a file has already been committed and is actively tracked by Git, adding its path to `.gitignore` does nothing—Git will continue tracking its changes.
+* **How to fix if already tracked:** We must explicitly remove it from Git's index while keeping the local file on disk:
+  ```bash
+  git rm --cached <file-path>
+  # For an entire directory:
+  git rm -r --cached tmp/
+  ```
+  After untracking it, we need to commit that removal. From that point on, `.gitignore` will properly ignore future changes to it.
+
+
+
+
+# Question 5: Resolving Merge Conflicts in Teamwork
+
+## Scenario Overview
+* Us and a teammate branched off from the same base commit.
+* Our teammate worked on `main`, while you worked on `feature-description`.
+* Both of us edited the exact same line in `README.md` with different text and committed the changes.
+* Your working tree is clean. When merging `feature-description` into `main`, Git reports a merge conflict on that line.
+
+---
+
+## 1. Why Did This Conflict Occur?
+
+### Root Cause
+Git can merge diverged branches automatically when changes occur in different files or even in different parts of the same file. However, a conflict occurred here because both branches modified the exact same line relative to their common ancestor commit.
+
+Git cannot guess developer intent or know which version is the correct one. Rather than arbitrarily picking one person's work and discarding the other, Git pauses the merge and asks a human to resolve the discrepancy.
+
+### Does Every Two-Person Edit on the Same File Cause a Conflict?
+* No.
+* If two collaborators modify different lines or different sections of the same file, Git's three-way merge algorithm merges them automatically without human intervention. A conflict is triggered only when changes overlap or affect the immediate surrounding context lines.
+
+---
+
+## 2. Identifying Conflicted Files and Understanding Conflict Markers
+
+### Identifying the Conflicted Files
+To see which files have conflicts, we can run:
+```bash
+git status
+```
+Git will list conflicted files under the heading:
+```text
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+	both modified:   README.md
+```
+
+### Understanding Conflict Markers
+Opening `README.md` reveals Git's built-in conflict markers around the affected lines:
+
+```text
+<<<<<<< HEAD
+This is the updated line written on the main branch.
+=======
+This is the updated line written on the feature-description branch.
+>>>>>>> feature-description
+```
+
+#### Meaning of Each Marker:
+* **`<<<<<<< HEAD`**: Marks the beginning of the conflicting block and shows the version present on your current checkout target branch (`main`).
+* **`=======`**: The separator line dividing the two competing versions.
+* **`>>>>>>> feature-description`**: Marks the end of the conflicting section and indicates the incoming branch name or commit hash where the alternate change came from.
+
+---
+
+## 3. Steps to Keep Both Changes and Complete the Merge
+
+To combine both sets of information without losing either teammate's contribution:
+
+### Step 1: Open the file and manually edit the content
+We can open `README.md` in text editor. Delete the marker lines (`<<<<<<<`, `=======`, and `>>>>>>>`) entirely and edit the text so that both ideas/sentences are combined logically:
+
+```text
+This is the updated line written on the main branch.
+This is the updated line written on the feature-description branch.
+```
+
+### Step 2: Ensure no conflict markers remain
+Check that all markers were removed cleanly by searching for residual syntax:
+```bash
+grep -rn "<<<<<<<" .
+# or
+git diff
+```
+If nothing turns up, all conflict markers have been eliminated.
+
+### Step 3: Stage the resolved file
+The cleaned file can be staged to tell Git that this conflict has been settled:
+```bash
+git add README.md
+```
+
+### Step 4: Finalize the merge commit
+Complete the merge operation:
+```bash
+git commit
+```
+Git opens the default editor with a pre-filled merge commit message (e.g., `Merge branch 'feature-description'`). To complete the merge, we have to save and close the editor.
+
+---
+
+## 4. How to Abort an In-Progress Merge
+
+If after inspecting the conflict we decide that now is not the right time to merge, we can cancel the operation and restore the repo to its pre-merge state by running:
+
+```bash
+git merge --abort
+```
+
+### this command:
+* Cleans up all unresolved conflict markers from your working tree.
+* Resets the staging area and working directory back to the state of `HEAD` before `git merge` was invoked.
